@@ -1,0 +1,13 @@
+#!/bin/bash
+
+mkdir $1;
+cd $1;
+mkdir src test build;
+
+if [ "$2" == "--static-lib" ]; then
+    cp $HOME/Templates/ctemplate/Makefile-a ./Makefile
+elif [ "$2" == "--dynamic-lib" ]; then
+    cp $HOME/Templates/ctemplate/Makefile-so ./Makefile
+else
+    cp $HOME/Templates/ctemplate/Makefile-elf ./Makefile
+fi
