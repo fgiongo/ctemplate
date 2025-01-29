@@ -8,7 +8,9 @@ fi
 
 mkdir $1;
 cd $1;
-mkdir src test build;
+mkdir src test build include;
+touch main.c
+touch test/main.test.c
 
 if [ "$2" == "--static-lib" ]; then
     cp $config_path/Makefile-a Makefile
