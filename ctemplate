@@ -1,13 +1,23 @@
 #!/bin/bash
 
+if [[ $1 == "uninstall" ]]; then
+    rm -f $install_path/ctemplate
+    rm -rf $config_path
+    exit 0
+fi
+
 mkdir $1;
 cd $1;
 mkdir src test build;
 
 if [ "$2" == "--static-lib" ]; then
-    cp $HOME/Templates/ctemplate/Makefile-a ./Makefile
+    cp $config_path/Makefile-a Makefile
+
 elif [ "$2" == "--dynamic-lib" ]; then
-    cp $HOME/Templates/ctemplate/Makefile-so ./Makefile
+    cp $config_path/Makefile-so Makefile
+
 else
-    cp $HOME/Templates/ctemplate/Makefile-elf ./Makefile
+    cp $config_path/Makefile-elf Makefile
+    sed -i "s/executable_name/$1/g" Makefile
+    sed -i "s/test_executable/$1.test/g" Makefile 
 fi
