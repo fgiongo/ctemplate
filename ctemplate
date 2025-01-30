@@ -6,11 +6,12 @@ if [[ $1 == "uninstall" ]]; then
     exit 0
 fi
 
-mkdir $1;
-cd $1;
-mkdir src test build include;
-touch main.c
-touch test/main.test.c
+mkdir $1
+cd $1
+mkdir src test build include
+touch src/main.c
+echo -e "int main(int argc, char **argc) {\n    return 0;\n}" > src/main.c
+cp src/main.c test/main.test.c
 
 if [ "$2" == "--static-lib" ]; then
     cp $config_path/Makefile-a Makefile
