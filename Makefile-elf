@@ -7,32 +7,24 @@ SRC_DIR = src
 BUILD_DIR = build
 TEST_DIR = test
 INCLUDE_DIR = include
-ENTRY = main
-ENTRY_TEST = main.test
 TARGET = executable_name
 TEST_TARGET = test_executable
 
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
+SRCS = $(filter-out $(SRC_DIR)/main.c, $(wildcard $(SRC_DIR)/*.c))
+TEST_SRCS = $(filter-out $(SRC_DIR)/main.test.c, $(wildcard $(TEST_DIR)/*.c))
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 TEST_OBJS = $(patsubst $(TEST_DIR)/%.c, $(BUILD_DIR)/%.o, $(TEST_SRCS))
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS) $(BUILD_DIR)/$(ENTRY).o
+$(TARGET): $(OBJS) $(BUILD_DIR)/main.o
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(BUILD_DIR)/$(ENTRY).o
-
-$(BUILD_DIR)/$(ENTRY).o: $(ENTRY).c
-	$(CC) $(CFLAGS) -c -I$(INCLUDE_DIR) $< -o $@
 
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
-$(TEST_TARGET): $(OBJS) $(TEST_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(TEST_OBJS) $(TEST_DIR)/$(ENTRY_TEST).o
-
-$(ENTRY_TEST).o: $(ENTRY_TEST).c
-	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+$(TEST_TARGET): $(OBJS) $(TEST_OBJS) $(BUILD_DIR)/main.test.o
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(TEST_OBJS) 
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
