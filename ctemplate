@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [[ -z $1 ]]; then
-    echo "ctemplate: usage: ctemplate [name | module | uninstall]"
+    echo "ctemplate: usage: ctemplate <command> [<args>]"
     exit 1
 fi
 
@@ -55,3 +55,8 @@ else
     sed -i "s/executable_name/$1/g" Makefile
     sed -i "s/test_executable/$1.test/g" Makefile 
 fi
+
+git init
+touch .gitignore
+echo ".ctemplate" >> .gitignore
+git add .
