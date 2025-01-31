@@ -1,18 +1,156 @@
 #!/bin/bash
 
-if [[ -z $1 ]]; then
-    echo "ctemplate: usage: ctemplate <command> [<args>]"
-    exit 1
-fi
+ctemplate_version="1.0.0"
 
-if [[ $1 == "uninstall" ]]; then
-    rm -f $install_path/ctemplate
-    rm -rf $config_path
+ctemplate_show_help () {
+
+    cat << EOF
+Usage: $0 [-h] [--help] [-v] [--version] <command> [OPTION]...
+
+Commands: 
+  help                  Show this help message
+  version               Show version number
+  new <name>            Initializes a new C project on working directory
+  module                C module handling subcommand
+  uninstall             Uninstall ctemplate
+
+Options:
+  --no-git              Don't initialize new git repository
+  -a                    Template for static library build
+  -s                    Template for dynamic (shared) library build
+EOF
+exit 0
+}
+
+
+ctemplate_show_version () {
+
+    echo "ctemplate version $ctemplate_version"
     exit 0
-fi
+}
 
-if [[ $1 == "module" ]]; then
 
+ctemplate_new () {
+
+    if [[ -z $2 ]]; then
+        echo "Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>"
+        exit 1
+    fi
+
+    name=""
+    git="true"
+    target_type="elf"
+
+    while [[ $# -ge 2 ]]; do
+
+        case $2 in
+
+            "-h" | "--help" | "help")
+                ctemplate_new_show_help
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            "-a")
+                target_type="a"
+                ;;
+
+            "-s")
+                target_type="so"
+                ;;
+
+            *)
+                if [[ $2 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    name=$2
+                else
+                    echo "$0 $1: invalid project name: $2"
+                    exit 1
+                fi
+        esac
+
+        shift
+    done
+
+    ctemplate_new_project "$name" "$project_type" "$git"
+}
+
+
+ctemplate_new_show_help () {
+    cat << EOF
+Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>
+
+Arguments:
+  project-name          Project name. Project name must be at least 2
+                        characters long, must start with a letter, must consist
+                        only of letters, numbers, dots, underscores and dashes.
+                        Needs to end on a letter or number.
+
+Options:
+  --no-git              Don't initialize new git repository
+  -a                    Template for static library build
+  -s                    Template for dynamic (shared) library build
+EOF
+    exit 0
+}
+
+
+ctemplate_new_project () {
+
+    name=$1
+    project_type=$2
+    git=$3
+
+    if [[ -z $name ]]; then
+        echo "$0 $1: missing <project-name> argument"
+        exit 1
+    fi
+
+    mkdir $name
+    cd $name
+    touch .ctemplate
+    echo -e "name=$name\nproject_type=$project_type\ngit=$git" >> .ctemplate
+    mkdir src test build include
+    touch test/test.main.c
+    echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > \
+        test/main.test.c
+
+    case $target_type in
+
+        "elf")
+            cp test/main.test.c src/main.c
+            cp $config_path/Makefile-elf Makefile
+            sed -i "s/executable_name/$1/g" Makefile
+            sed -i "s/test_executable/$1.test/g" Makefile
+            ;;
+
+        "so")
+            cp $config_path/Makefile-so Makefile
+            # TODO(nando): search and replace placeholders in Makefile
+            ;;
+
+        "a")
+            cp $config_path/Makefile-a Makefile
+            # TODO(nando): search and replace placeholders in Makefile
+            ;;
+
+    esac
+
+    if [[ $git == "true" ]]; then
+        git init
+        touch .gitignore
+        echo ".ctemplate" >> .gitignore
+        git add .
+    fi
+
+    exit 0
+}
+
+
+ctemplate_module () {
+
+    # TODO(nando): standardize this output
     if [[ -z $2 ]]; then
         echo "ctemplate: usage: ctemplate module [name]"
         exit 1
@@ -34,29 +172,41 @@ if [[ $1 == "module" ]]; then
     fi
 
     exit 0
-fi
+}
 
-mkdir $1
-cd $1
-touch .ctemplate
-mkdir src test build include
-touch src/main.c
-echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > src/main.c
-cp src/main.c test/main.test.c
 
-if [ "$2" == "--static-lib" ]; then
-    cp $config_path/Makefile-a Makefile
+ctemplate_uninstall () {
 
-elif [ "$2" == "--dynamic-lib" ]; then
-    cp $config_path/Makefile-so Makefile
+    rm -f $install_path/ctemplate
+    rm -rf $config_path
+    exit 0
+}
 
-else
-    cp $config_path/Makefile-elf Makefile
-    sed -i "s/executable_name/$1/g" Makefile
-    sed -i "s/test_executable/$1.test/g" Makefile 
-fi
+case $1 in
 
-git init
-touch .gitignore
-echo ".ctemplate" >> .gitignore
-git add .
+    "help" | "-h" | "--help")
+        ctemplate_show_help
+        ;;
+
+    "version" | "-v" | "--version")
+        ctemplate_show_version
+        ;;
+
+    "new")
+        ctemplate_new "$@"
+        ;;
+
+    "module")
+        ctemplate_module "$@"
+        ;;
+
+    "uninstall")
+        ctemplate_uninstall
+        ;;
+
+    *)
+        echo "Usage: $0 [-h] [--help] [-v] [--version] <command> [OPTION]..."
+        exit 1
+        ;;
+
+esac
