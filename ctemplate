@@ -1,8 +1,9 @@
 #!/bin/bash
 
 ctemplate_version="1.0.0"
+dotfile=".ctemplate"
 
-ctemplate_show_help () {
+ctemplate_print_help () {
 
     cat << EOF
 Usage: $0 [-h] [--help] [-v] [--version] <command> [OPTION]...
@@ -13,24 +14,17 @@ Commands:
   new <name>            Initializes a new C project on working directory
   module                C module handling subcommand
   uninstall             Uninstall ctemplate
-
-Options:
-  --no-git              Don't initialize new git repository
-  -a                    Template for static library build
-  -s                    Template for dynamic (shared) library build
 EOF
-exit 0
 }
 
 
-ctemplate_show_version () {
+ctemplate_print_version () {
 
-    echo "ctemplate version $ctemplate_version"
-    exit 0
+    echo "$0 version $ctemplate_version"
 }
 
 
-ctemplate_new () {
+ctemplate_create () {
 
     if [[ -z $2 ]]; then
         echo "Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>"
@@ -46,7 +40,8 @@ ctemplate_new () {
         case $2 in
 
             "-h" | "--help" | "help")
-                ctemplate_new_show_help
+                ctemplate_create_print_help $@
+                exit 0
                 ;;
 
             "--no-git")
@@ -66,6 +61,7 @@ ctemplate_new () {
                     name=$2
                 else
                     echo "$0 $1: invalid project name: $2"
+                    ctemplate_create_print_help $@
                     exit 1
                 fi
         esac
@@ -73,11 +69,11 @@ ctemplate_new () {
         shift
     done
 
-    ctemplate_new_project "$name" "$project_type" "$git"
+    ctemplate_generate "$name" "$project_type" "$git"
 }
 
 
-ctemplate_new_show_help () {
+ctemplate_create_print_help () {
     cat << EOF
 Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>
 
@@ -92,11 +88,10 @@ Options:
   -a                    Template for static library build
   -s                    Template for dynamic (shared) library build
 EOF
-    exit 0
 }
 
 
-ctemplate_new_project () {
+ctemplate_generate () {
 
     name=$1
     project_type=$2
@@ -109,10 +104,8 @@ ctemplate_new_project () {
 
     mkdir $name
     cd $name
-    touch .ctemplate
-    echo -e "name=$name\nproject_type=$project_type\ngit=$git" >> .ctemplate
+    echo -e "name=$name\nproject_type=$project_type\ngit=$git" >> $dotfile
     mkdir src test build include
-    touch test/test.main.c
     echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > \
         test/main.test.c
 
@@ -140,7 +133,7 @@ ctemplate_new_project () {
     if [[ $git == "true" ]]; then
         git init
         touch .gitignore
-        echo ".ctemplate" >> .gitignore
+        echo "$dotfile" >> .gitignore
         git add .
     fi
 
@@ -150,27 +143,69 @@ ctemplate_new_project () {
 
 ctemplate_module () {
 
-    # TODO(nando): standardize this output
     if [[ -z $2 ]]; then
-        echo "ctemplate: usage: ctemplate module [name]"
+        echo "Usage: $0 $1 <command> [OPTION]... [<arguments>]"
         exit 1
     fi
 
-    if [[ -e ../.ctemplate ]]; then
-        cd ..
-    fi
+    if [[ -e $dotfile ]]; then
+        source $dotfile
 
-    if [[ -e .ctemplate ]]; then
-        touch include/$2.h
-        touch include/$2.test.h
-        touch src/$2.c
-        touch test/$2.test.c
-        exit 0
+    elif [[ -e ../$dotfile ]]; then
+        cd ..
+        source $dotfile
 
     else
-        echo "ctemplate module: not a valid ctemplate directory"
+        echo "$0 $1: not a valid ctemplate directory"
+        exit 1
     fi
 
+    case $2 in
+
+        "-h" | "--help" | "help")
+            ctemplate_module_print_help $@
+            exit 0
+            ;;
+
+        "create")
+            ctemplate_module_create $@
+            ;;
+
+        "delete")
+            ctemplate_module_delete $@
+            ;;
+
+        *)
+            echo "$0 $1: $2 is not a valid command"
+            ctemplate_module_print_help $@
+            exit 1
+    esac
+    exit 0
+}
+
+
+ctemplate_module_print_help () {
+
+    cat << EOF
+Usage: $0 $1 <command> [OPTION]... [<arguments>]
+
+Commands:
+  create                Creates new module source files
+  delete                Deletes module source files
+EOF
+}
+
+
+ctemplate_module_create () {
+
+    # TODO(nando): implement
+    exit 0
+}
+
+
+ctemplate_module_delete () {
+
+    # TODO(nando): implement
     exit 0
 }
 
@@ -185,15 +220,16 @@ ctemplate_uninstall () {
 case $1 in
 
     "help" | "-h" | "--help")
-        ctemplate_show_help
+        ctemplate_print_help $@
+        exit 0
         ;;
 
     "version" | "-v" | "--version")
-        ctemplate_show_version
+        ctemplate_version
         ;;
 
-    "new")
-        ctemplate_new "$@"
+    "create")
+        ctemplate_create "$@"
         ;;
 
     "module")
@@ -205,7 +241,8 @@ case $1 in
         ;;
 
     *)
-        echo "Usage: $0 [-h] [--help] [-v] [--version] <command> [OPTION]..."
+        echo "$0: $1 is not a valid command"
+        ctemplate_print_help $@
         exit 1
         ;;
 
