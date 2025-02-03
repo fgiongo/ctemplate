@@ -74,6 +74,7 @@ ctemplate_create () {
 
 
 ctemplate_create_print_help () {
+
     cat << EOF
 Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>
 
@@ -93,7 +94,7 @@ EOF
 
 ctemplate_generate () {
 
-    name=$1
+    project_name=$1
     project_type=$2
     git=$3
 
@@ -104,7 +105,8 @@ ctemplate_generate () {
 
     mkdir $name
     cd $name
-    echo -e "name=$name\nproject_type=$project_type\ngit=$git" >> $dotfile
+    echo -e "project_name=$project_name\nproject_type=$project_type\ngit=$git" \
+        >> $dotfile
     mkdir src test build include
     echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > \
         test/main.test.c
@@ -149,15 +151,13 @@ ctemplate_module () {
     fi
 
     if [[ -e $dotfile ]]; then
-        source $dotfile
+        if [[ -e ../$dotfile ]]; then
+            cd ..
 
-    elif [[ -e ../$dotfile ]]; then
-        cd ..
-        source $dotfile
-
-    else
-        echo "$0 $1: not a valid ctemplate directory"
-        exit 1
+        else
+            echo "$0 $1: not a valid ctemplate directory"
+            exit 1
+        fi
     fi
 
     case $2 in
@@ -198,8 +198,82 @@ EOF
 
 ctemplate_module_create () {
 
-    # TODO(nando): implement
+    source $dotfile
+    modules=()
+
+    while [[ $# -ge 3 ]]; do
+        case $3 in
+
+            "-h" | "--help" | "help")
+                ctemplate_module_create_print_help $@
+                exit 0
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            *)
+                if [[ $3 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    modules+=$3
+                else
+                    echo "$0 $1 $2: invalid module name: $3"
+                    ctemplate_module_create_print_help $@
+                    exit 1
+                fi
+        esac
+        shift
+    done
+
+    if [[ $modules ]]; then
+        for module in ${modules[@]}
+        do
+            ctemplate_generate_module $module $git
+        done
+    else
+        echo "$0 $1 $2 requires argument <module-name>" 
+        ctemplate_module_create_print_help $@
+        exit 1;
+    fi
+
     exit 0
+}
+
+
+ctemplate_module_create_print_help () {
+
+    cat << EOF
+Usage: $0 $1 $2 [-h] [--help] [help] [OPTION]... [<module-name>]...
+
+Arguments:
+  module-name           Module name. Module name must be at least 2 characters
+                        long, must start with a letter, must consist only of
+                        letters, numbers, dots, underscores and dashes. Needs
+                        to end on a letter or number.
+
+Options:
+  --no-git              Don't track files on git repository
+EOF
+}
+
+
+ctemplate_generate_module () {
+
+    module_name=$1
+    git=$2
+    touch src/$module_name.c
+    touch test/$module_name.test.c
+
+    header_macro=$(sed  -E "s/[.-]/_/g;s/(.*)/\U\1/g")
+    echo -e "#ifndef ${header_macro}_H\n#define ${header_macro}_H\n\n\n\n#endif" \
+        > include/$module_name.h
+    echo -e "#ifndef ${header_macro}_TEST_H\n#define ${header_macro}_TEST_H\n\n\n\n#endif" \
+        > include/$module_name.test.h
+
+    if [[ $git == "true" ]]; then
+        git add src/$module_name.c test/$module_name.test.c \
+            include/$module_name.h include/$module_name.test.h
+    fi
 }
 
 
@@ -207,6 +281,17 @@ ctemplate_module_delete () {
 
     # TODO(nando): implement
     exit 0
+}
+
+
+ctemplate_module_delete_print_help () {
+
+    cat << EOF
+Usage: $0 $1 $2 [-h] [--help] [help] <module-name>
+
+Arguments:
+  module-name           Name of module to be deleted
+EOF
 }
 
 
