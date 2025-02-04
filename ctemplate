@@ -234,7 +234,6 @@ ctemplate_module_create () {
 
     if [[ $modules ]]; then
         for module in ${modules[@]}; do
-            echo "creating module $module"
             create_single_module "$module" "$git"
         done
     else
