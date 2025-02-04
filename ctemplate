@@ -1,62 +1,401 @@
 #!/bin/bash
 
-if [[ -z $1 ]]; then
-    echo "ctemplate: usage: ctemplate <command> [<args>]"
-    exit 1
-fi
+ctemplate_version="1.0.0"
+dotfile=".ctemplate"
 
-if [[ $1 == "uninstall" ]]; then
-    rm -f $install_path/ctemplate
-    rm -rf $config_path
-    exit 0
-fi
+ctemplate_print_help () {
 
-if [[ $1 == "module" ]]; then
+    cat << EOF
+Usage: $0 [-h] [--help] [-v] [--version] <command> [OPTION]...
+
+Commands: 
+  help                  Show this help message
+  version               Show version number
+  new <name>            Initializes a new C project on working directory
+  module                C module handling subcommand
+  uninstall             Uninstall ctemplate
+EOF
+}
+
+
+ctemplate_print_version () {
+
+    echo "$0 version $ctemplate_version"
+}
+
+
+ctemplate_create () {
 
     if [[ -z $2 ]]; then
-        echo "ctemplate: usage: ctemplate module [name]"
+        echo "Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>"
         exit 1
     fi
 
-    if [[ -e ../.ctemplate ]]; then
-        cd ..
+    name=""
+    git="true"
+    target_type="elf"
+
+    while [[ $# -ge 2 ]]; do
+
+        case $2 in
+
+            "-h" | "--help" | "help")
+                ctemplate_create_print_help $@
+                exit 0
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            "-a")
+                target_type="a"
+                ;;
+
+            "-s")
+                target_type="so"
+                ;;
+
+            *)
+                if [[ $2 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    name=$2
+                else
+                    echo "$0 $1: invalid project name: $2"
+                    ctemplate_create_print_help $@
+                    exit 1
+                fi
+        esac
+
+        shift
+    done
+
+    if [[ $git == "true" ]] && ! command -v git >/dev/null 2>&1; then
+        echo "$0 $1: warning: git not installed, proceeding with flag --no-git"
+        git="false"
     fi
 
-    if [[ -e .ctemplate ]]; then
-        touch include/$2.h
-        touch include/$2.test.h
-        touch src/$2.c
-        touch test/$2.test.c
-        exit 0
+    ctemplate_generate "$name" "$project_type" "$git"
+}
 
-    else
-        echo "ctemplate module: not a valid ctemplate directory"
+
+ctemplate_create_print_help () {
+
+    cat << EOF
+Usage: $0 $1 [-h] [--help] [help] [OPTION]... <project-name>
+
+Arguments:
+  project-name          Project name. Project name must be at least 2
+                        characters long, must start with a letter, must consist
+                        only of letters, numbers, dots, underscores and dashes.
+                        Needs to end on a letter or number.
+
+Options:
+  --no-git              Don't initialize new git repository
+  -a                    Template for static library build
+  -s                    Template for dynamic (shared) library build
+EOF
+}
+
+
+ctemplate_generate () {
+
+    project_name=$1
+    project_type=$2
+    git=$3
+
+    if [[ -z $name ]]; then
+        echo "$0 $1: missing <project-name> argument"
+        exit 1
+    fi
+
+    mkdir $name
+    cd $name
+    echo -e "project_name=$project_name\nproject_type=$project_type\ngit=$git" \
+        >> $dotfile
+    mkdir src test build include
+    echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > \
+        test/main.test.c
+
+    case $target_type in
+
+        "elf")
+            cp test/main.test.c src/main.c
+            cp $config_path/Makefile-elf Makefile
+            sed -i "s/executable_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
+            ;;
+
+        "so")
+            cp $config_path/Makefile-so Makefile
+            sed -i "s/library_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
+            ;;
+
+        "a")
+            cp $config_path/Makefile-a Makefile
+            sed -i "s/library_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
+            ;;
+
+    esac
+
+    if [[ $git == "true" ]]; then
+        git init
+        touch .gitignore
+        echo "$dotfile" >> .gitignore
+        git add .
     fi
 
     exit 0
-fi
+}
 
-mkdir $1
-cd $1
-touch .ctemplate
-mkdir src test build include
-touch src/main.c
-echo -e "int main(int argc, char **argv) {\n    return 0;\n}" > src/main.c
-cp src/main.c test/main.test.c
 
-if [ "$2" == "--static-lib" ]; then
-    cp $config_path/Makefile-a Makefile
+ctemplate_module () {
 
-elif [ "$2" == "--dynamic-lib" ]; then
-    cp $config_path/Makefile-so Makefile
+    if [[ -z $2 ]]; then
+        echo "Usage: $0 $1 <command> [OPTION]... [<arguments>]"
+        exit 1
+    fi
 
-else
-    cp $config_path/Makefile-elf Makefile
-    sed -i "s/executable_name/$1/g" Makefile
-    sed -i "s/test_executable/$1.test/g" Makefile 
-fi
+    if [[ ! -e $dotfile ]]; then
+        if [[ -e ../$dotfile ]]; then
+            cd ..
 
-git init
-touch .gitignore
-echo ".ctemplate" >> .gitignore
-git add .
+        else
+            echo "$0 $1: not a valid ctemplate directory"
+            exit 1
+        fi
+    fi
+
+    case $2 in
+
+        "-h" | "--help" | "help")
+            ctemplate_module_print_help $@
+            exit 0
+            ;;
+
+        "create")
+            ctemplate_module_create $@
+            ;;
+
+        "delete")
+            ctemplate_module_delete $@
+            ;;
+
+        *)
+            echo "$0 $1: $2 is not a valid command"
+            ctemplate_module_print_help $@
+            exit 1
+    esac
+    exit 0
+}
+
+
+ctemplate_module_print_help () {
+
+    cat << EOF
+Usage: $0 $1 <command> [OPTION]... [<arguments>]
+
+Commands:
+  create                Creates new module source files
+  delete                Deletes module source files
+EOF
+}
+
+
+ctemplate_module_create () {
+
+    source $dotfile
+    modules=()
+
+    while [[ $# -ge 3 ]]; do
+        case $3 in
+
+            "-h" | "--help" | "help")
+                ctemplate_module_create_print_help $@
+                exit 0
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            *)
+                if [[ $3 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    modules+=$3
+                else
+                    echo "$0 $1 $2: invalid module name: $3"
+                    ctemplate_module_create_print_help $@
+                    exit 1
+                fi
+        esac
+        shift
+    done
+
+    if [[ $modules ]]; then
+        for module in ${modules[@]}; do
+            create_single_module "$module" "$git"
+        done
+    else
+        echo "$0 $1 $2 requires argument <module-name>" 
+        ctemplate_module_create_print_help $@
+        exit 1;
+    fi
+
+    exit 0
+}
+
+
+ctemplate_module_create_print_help () {
+
+    cat << EOF
+Usage: $0 $1 $2 [-h] [--help] [help] [OPTION]... [<module-name>]...
+
+Arguments:
+  module-name           Module name. Module name must be at least 2 characters
+                        long, must start with a letter, must consist only of
+                        letters, numbers, dots, underscores and dashes. Needs
+                        to end on a letter or number.
+
+Options:
+  --no-git              Don't track files on git repository
+EOF
+}
+
+
+create_single_module () {
+
+    module_name=$1
+    git=$2
+
+    touch src/$module_name.c
+    touch test/$module_name.test.c
+
+    header_macro=$(echo "$module_name" | sed  -E "s/[.-]/_/g;s/(.*)/\U\1/g")
+
+    echo -e "#ifndef ${header_macro}_H\n#define ${header_macro}_H\n\n\n\n#endif" \
+        > include/$module_name.h
+
+    echo -e "#ifndef ${header_macro}_TEST_H\n#define ${header_macro}_TEST_H\n\n\n\n#endif" \
+        > include/$module_name.test.h
+
+    if [[ $git == "true" ]]; then
+        git add src/$module_name.c test/$module_name.test.c \
+            include/$module_name.h include/$module_name.test.h
+    fi
+}
+
+
+ctemplate_module_delete () {
+
+    modules=()
+
+    while [[ $# -ge 3 ]]; do
+        case $3 in
+
+            "-h" | "--help" | "help")
+                ctemplate_module_delete_print_help $@
+                exit 0
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            *)
+                if [[ $3 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    modules+=$3
+                else
+                    echo "$0 $1 $2: invalid module name: $3"
+                    ctemplate_module_delete_print_help $@
+                    exit 1
+                fi
+        esac
+        shift
+    done
+
+    if [[ $modules ]]; then
+        for module in ${modules[@]}
+        do
+            delete_single_module "$module"
+        done
+    else
+        echo "$0 $1 $2 requires argument <module-name>" 
+        ctemplate_module_create_print_help $@
+        exit 1;
+    fi
+
+    exit 0
+}
+
+
+ctemplate_module_delete_print_help () {
+
+    cat << EOF
+Usage: $0 $1 $2 [-h] [--help] [help] <module-name>
+
+Arguments:
+  module-name           Name of module to be deleted
+EOF
+}
+
+
+delete_single_module () {
+
+    module=$1
+
+    if [[ -e src/$module.c ]]; then
+        rm src/$module.c
+    fi
+
+    if [[ -e test/$module.test.c ]]; then
+        rm test/$module.test.c
+    fi
+
+    if [[ -e include/$module.h ]]; then
+        rm include/$module.h
+    fi
+
+    if [[ -e include/$module.test.h ]]; then
+        rm include/$module.test.h
+    fi
+}
+
+
+ctemplate_uninstall () {
+
+    rm -f $install_path/ctemplate
+    rm -rf $config_path
+    exit 0
+}
+
+case $1 in
+
+    "help" | "-h" | "--help")
+        ctemplate_print_help $@
+        exit 0
+        ;;
+
+    "version" | "-v" | "--version")
+        ctemplate_version
+        ;;
+
+    "create")
+        ctemplate_create "$@"
+        ;;
+
+    "module")
+        ctemplate_module "$@"
+        ;;
+
+    "uninstall")
+        ctemplate_uninstall
+        ;;
+
+    *)
+        echo "$0: $1 is not a valid command"
+        ctemplate_print_help $@
+        exit 1
+        ;;
+
+esac
