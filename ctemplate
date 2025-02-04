@@ -272,9 +272,11 @@ create_single_module () {
     touch src/$module_name.c
     touch test/$module_name.test.c
 
-    header_macro=$(sed  -E "s/[.-]/_/g;s/(.*)/\U\1/g")
+    header_macro=$(echo "$module_name" | sed  -E "s/[.-]/_/g;s/(.*)/\U\1/g")
+
     echo -e "#ifndef ${header_macro}_H\n#define ${header_macro}_H\n\n\n\n#endif" \
         > include/$module_name.h
+
     echo -e "#ifndef ${header_macro}_TEST_H\n#define ${header_macro}_TEST_H\n\n\n\n#endif" \
         > include/$module_name.test.h
 
