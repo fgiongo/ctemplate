@@ -69,6 +69,11 @@ ctemplate_create () {
         shift
     done
 
+    if [[ $git == "true" ]] && command -v git >/dev/null 2>&1; then
+        echo "$0 $1: warning: git not installed, proceeding with flag --no-git"
+        git="false"
+    fi
+
     ctemplate_generate "$name" "$project_type" "$git"
 }
 
@@ -116,18 +121,20 @@ ctemplate_generate () {
         "elf")
             cp test/main.test.c src/main.c
             cp $config_path/Makefile-elf Makefile
-            sed -i "s/executable_name/$1/g" Makefile
-            sed -i "s/test_executable/$1.test/g" Makefile
+            sed -i "s/executable_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
             ;;
 
         "so")
             cp $config_path/Makefile-so Makefile
-            # TODO(nando): search and replace placeholders in Makefile
+            sed -i "s/library_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
             ;;
 
         "a")
             cp $config_path/Makefile-a Makefile
-            # TODO(nando): search and replace placeholders in Makefile
+            sed -i "s/library_name/${1}/g;s/test_executable/${1}.test/g" \
+                Makefile
             ;;
 
     esac
@@ -150,7 +157,7 @@ ctemplate_module () {
         exit 1
     fi
 
-    if [[ -e $dotfile ]]; then
+    if ! [[ ! -e $dotfile ]]; then
         if [[ -e ../$dotfile ]]; then
             cd ..
 
@@ -228,7 +235,7 @@ ctemplate_module_create () {
     if [[ $modules ]]; then
         for module in ${modules[@]}
         do
-            ctemplate_generate_module $module $git
+            create_single_module "$module" "$git"
         done
     else
         echo "$0 $1 $2 requires argument <module-name>" 
@@ -257,7 +264,7 @@ EOF
 }
 
 
-ctemplate_generate_module () {
+create_single_module () {
 
     module_name=$1
     git=$2
@@ -279,7 +286,43 @@ ctemplate_generate_module () {
 
 ctemplate_module_delete () {
 
-    # TODO(nando): implement
+    modules=()
+
+    while [[ $# -ge 3 ]]; do
+        case $3 in
+
+            "-h" | "--help" | "help")
+                ctemplate_module_delete_print_help $@
+                exit 0
+                ;;
+
+            "--no-git")
+                git="false"
+                ;;
+
+            *)
+                if [[ $3 =~ ^[a-zA-Z][a-zA-Z0-9._-]*[a-zA-Z0-9]$ ]]; then
+                    modules+=$3
+                else
+                    echo "$0 $1 $2: invalid module name: $3"
+                    ctemplate_module_delete_print_help $@
+                    exit 1
+                fi
+        esac
+        shift
+    done
+
+    if [[ $modules ]]; then
+        for module in ${modules[@]}
+        do
+            delete_single_module "$module"
+        done
+    else
+        echo "$0 $1 $2 requires argument <module-name>" 
+        ctemplate_module_create_print_help $@
+        exit 1;
+    fi
+
     exit 0
 }
 
@@ -292,6 +335,28 @@ Usage: $0 $1 $2 [-h] [--help] [help] <module-name>
 Arguments:
   module-name           Name of module to be deleted
 EOF
+}
+
+
+ctemplate_delete_single_module () {
+
+    module=$1
+
+    if [[ -e src/$module.c ]]; then
+        rm src/module.c
+    fi
+
+    if [[ -e test/$module.test.c ]]; then
+        rm test/module.test.c
+    fi
+
+    if [[ -e include/$module.h ]]; then
+        rm include/module.h
+    fi
+
+    if [[ -e include/$module.test.h ]]; then
+        rm include/module.test.h
+    fi
 }
 
 
